@@ -67,7 +67,7 @@ const DownloadIcon = (props: IconProps) => (
   >
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <polyline points="7 10 12 15 17 10" />
-    <line x1="12" y1="15" y2="3" />
+    <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 );
 
@@ -192,9 +192,14 @@ export default function Page() {
       } else {
         setError("Failed to get advice from the API.");
       }
-    } catch (err: any) {
-      setError(err?.message ?? "An unknown error occurred.");
-      console.error("Prompt Advisor Error:", err);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+        console.error("Prompt Advisor Error:", err);
+      } else {
+        setError("An unknown error occurred.");
+        console.error("Prompt Advisor Error:", err);
+      }
     } finally {
       setIsAdvising(false);
     }
@@ -229,14 +234,35 @@ export default function Page() {
       if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
 
       const result = await response.json();
-      if (result.predictions && result.predictions.length > 0) {
-        setGeneratedImages(result.predictions);
+      // Assuming the API returns an array of images in result.predictions[0].bytesBase64Encoded
+      // or similar structure. Adjust as needed for your API response.
+      if (
+        result?.predictions &&
+        Array.isArray(result.predictions[0]?.bytesBase64Encoded)
+      ) {
+        setGeneratedImages(
+          result.predictions[0].bytesBase64Encoded.map((b64: string) => ({
+            bytesBase64Encoded: b64,
+          }))
+        );
+      } else if (result?.predictions && Array.isArray(result.predictions)) {
+        // Fallback: if predictions is an array of objects with bytesBase64Encoded
+        setGeneratedImages(
+          result.predictions.map((img: any) => ({
+            bytesBase64Encoded: img.bytesBase64Encoded,
+          }))
+        );
       } else {
-        setError("No images were generated.");
+        setError("Failed to generate images from the API.");
       }
-    } catch (err: any) {
-      setError(err?.message ?? "An unknown error occurred.");
-      console.error("Image Generation Error:", err);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+        console.error("Image Generation Error:", err);
+      } else {
+        setError("An unknown error occurred.");
+        console.error("Image Generation Error:", err);
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -341,25 +367,20 @@ export default function Page() {
             <button
               onClick={handleImageGeneration}
               disabled={isGenerating}
-              className="w-full mt-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:bg-gray-500 disabled:cursor-not-allowed"
+              className="mt-8 w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-wait flex items-center justify-center"
             >
-              <SparklesIcon className="w-5 h-5 mr-2" />
-              {isGenerating ? "Generating..." : "Generate Images"}
-              {isGenerating && <Spinner className="w-5 h-5 ml-2" />}
+              {isGenerating ? (
+                <>
+                  <Spinner className="w-5 h-5 mr-2" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <ImageIcon className="w-5 h-5 mr-2" />
+                  Generate
+                </>
+              )}
             </button>
-          </aside>
-
-          {/* Image Display Area (Right Side) */}
-          <div className="lg:col-span-2 bg-gray-50 dark:bg-gray-800/50 p-6 rounded-2xl shadow-sm flex items-center justify-center min-h-[50vh] lg:min-h-0">
-            {isGenerating && <Spinner className="w-12 h-12 text-indigo-500" />}
-
-            {error && (
-              <div className="text-center text-red-500 dark:text-red-400">
-                <h3 className="font-bold text-lg">An Error Occurred</h3>
-                <p>{error}</p>
-              </div>
-            )}
-
             {!isGenerating && !error && generatedImages.length === 0 && (
               <div className="text-center text-gray-500 dark:text-gray-400">
                 <ImageIcon className="w-16 h-16 mx-auto mb-4" />
@@ -370,13 +391,14 @@ export default function Page() {
               </div>
             )}
 
-            {!isGenerating && generatedImages.length > 0 && (
-              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {!isGenerating && !error && generatedImages.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-6 w-full">
                 {generatedImages.map((imgData, index) => (
                   <div
                     key={index}
                     className="group relative rounded-lg overflow-hidden aspect-square"
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`data:image/png;base64,${imgData.bytesBase64Encoded}`}
                       alt={`Generated image ${index + 1} for prompt: ${prompt}`}
@@ -394,7 +416,7 @@ export default function Page() {
                 ))}
               </div>
             )}
-          </div>
+          </aside>
         </main>
       </div>
     </div>
